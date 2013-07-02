@@ -5,10 +5,11 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
-char privateKey[] = "yioAA8sp";
-String publicKey = "WgorEbGv";
+char privateKey[] = "yourPrivateKey";
+String publicKey = "yourPublicKey";
 char serverName[] = "sultry-ridge-5201.herokuapp.com";
 long delay_ms = 1800000;
+String deviceName = "viabasse";
 
 
 //mac address
@@ -147,13 +148,13 @@ void loop() {
   float temp_in = readTemperature(insideThermometer);
   float temp_out = readTemperature(outsideThermometer);
   
-  concatenatedParams = concatenateParameters(privateKey,"viabasse","in",temp_in);
+  concatenatedParams = concatenateParameters(privateKey,deviceName,"in",temp_in);
   hashResult = hashToString(createHash(concatenatedParams)).substring(0,40);
-  sendToServer(createURL("viabasse","in",temp_in),hashResult);
+  sendToServer(createURL(deviceName,"in",temp_in),hashResult);
 
-  concatenatedParams = concatenateParameters(privateKey,"viabasse","out",temp_out);
+  concatenatedParams = concatenateParameters(privateKey,deviceName,"out",temp_out);
   hashResult = hashToString(createHash(concatenatedParams)).substring(0,40);
-  sendToServer(createURL("viabasse","out",temp_out),hashResult);
+  sendToServer(createURL(deviceName,"out",temp_out),hashResult);
 
   delay(delay_ms);
 }
