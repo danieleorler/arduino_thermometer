@@ -102,7 +102,7 @@ String createURL(char* device, char* sensor, float temperature)
 */
 void sendToServer(String URL, String hash)
 {
-  // attempt to connect, and wait a millisecond:
+  // attempt to connect
   if (client.connect(serverName, 80))
   {
     Serial.println("making HTTP request...");
@@ -112,26 +112,21 @@ void sendToServer(String URL, String hash)
     client.println("User-Agent: arduino-ethernet");
     client.println("ARD-HASH: "+hash);
     client.println("ARD-APIKEY: "+publicKey);
-    //client.println("Connection: close");
     client.println();
     
-    while(!client.available()){
+    while(!client.available())
+    {
         delay(1);
     }
-
-   /*while(client.available()) {
-        char c = client.read();
-        Serial.print(c);
-    }*/
     
     client.stop();
+    
   }
   else
   {
     Serial.println("error");
   }
-  // note the time of this connect attempt:
-  //lastAttemptTime = millis();
+
 }
 
 float readTemperature(DeviceAddress device)
@@ -140,7 +135,8 @@ float readTemperature(DeviceAddress device)
   return sensors.getTempC(device);
 }
 
-void loop() {
+void loop()
+{
   
   String concatenatedParams;
   String hashResult;
