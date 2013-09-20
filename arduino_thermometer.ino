@@ -72,7 +72,6 @@ void setup(void)
   
   //sync time via NTP
   syncTimeNTP(15);
-
 }
 
 /*
@@ -171,26 +170,12 @@ int sendToServer(String URL, String hash)
   Serial.println(F("Timeout outside while"));
   client.stop();
   return 1;
-
 }
 
 float readTemperature(DeviceAddress device)
 {
   sensors.requestTemperatures();
   return sensors.getTempC(device);
-}
-
-void clockDisplay(){
-  Serial.print(hour());
-  Serial.print(minute());
-  Serial.print(second());
-  Serial.print(" ");
-  Serial.print(day());
-  Serial.print(" ");
-  Serial.print(month());
-  Serial.print(" ");
-  Serial.print(year()); 
-  Serial.println(); 
 }
 
 void loop()
