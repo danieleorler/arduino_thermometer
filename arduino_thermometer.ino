@@ -2,34 +2,55 @@
 #include <Time.h>
 #include <SPI.h>
 #include <Ethernet.h>
+#include <EthernetUdp.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
+/****** TEMPERATURE CONFIG ******/
 char privateKey[] = "yourprivateKey";
 String publicKey = "yourpublicKey";
 char serverName[] = "sultry-ridge-5201.herokuapp.com";
-long delay_ms = 1800000;
 char deviceName[] = "viabasse";
+//last sensors read in seconds
+unsigned long lastTempRead = 0;
+//sensors read interval in seconds
+unsigned long tempReadInterval = 1800;
 
+/****** NTP CONFIG ******/
+IPAddress timeServer(193,92,150,3); 
+unsigned int ntpSyncTime = 15;
+// local port to listen for UDP packets
+unsigned int localPort = 8888;
+// NTP time stamp is in the first 48 bytes of the message
+const int NTP_PACKET_SIZE= 48;
+// Buffer to hold incoming and outgoing packets
+byte packetBuffer[NTP_PACKET_SIZE];
+// A UDP instance to let us send and receive packets over UDP
+EthernetUDP Udp;
+// Keeps track of how long ago we updated the NTP server
+unsigned long ntpLastUpdate = 0;
+// sync interval in seconds
+unsigned long ntpIntervalSync = 43200;
 
+/****** ARDUINO ETHERNET CONFIG ******/
 //mac address
 byte mac[] = { 0x00, 0xAA, 0xBB, 0xCC, 0xDE, 0x01 };
-//ip address
+//arduino ip address
 IPAddress ip(192,168,0,20);
 //client
 EthernetClient client;
 
+/****** ONEWIRE ETHERNET CONFIG ******/
 // Data wire is plugged into port 2 on the Arduino
 #define ONE_WIRE_BUS 2
-
 // Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
 OneWire oneWire(ONE_WIRE_BUS);
-
 // Pass our oneWire reference to Dallas Temperature. 
 DallasTemperature sensors(&oneWire);
-
 // arrays to hold device address
 DeviceAddress insideThermometer, outsideThermometer;
+
+
 
 void setup(void)
 {
@@ -48,8 +69,11 @@ void setup(void)
   {
     Ethernet.begin(mac, ip);
   }
-}
+  
+  //sync time via NTP
+  syncTimeNTP(15);
 
+}
 
 /*
 * creates hash
@@ -156,22 +180,111 @@ float readTemperature(DeviceAddress device)
   return sensors.getTempC(device);
 }
 
+void clockDisplay(){
+  Serial.print(hour());
+  Serial.print(minute());
+  Serial.print(second());
+  Serial.print(" ");
+  Serial.print(day());
+  Serial.print(" ");
+  Serial.print(month());
+  Serial.print(" ");
+  Serial.print(year()); 
+  Serial.println(); 
+}
+
 void loop()
 {
+  //sensors read
+  if(lastTempRead + tempReadInterval < now())
+  {
+    String concatenatedParams;
+    String hashResult;
+    
+    float temp_in = readTemperature(insideThermometer);
+    float temp_out = readTemperature(outsideThermometer);
+    
+    concatenatedParams = concatenateParameters(privateKey,deviceName,"in",temp_in);
+    hashResult = hashToString(createHash(concatenatedParams)).substring(0,40);
+    sendToServer(createURL(deviceName,"in",temp_in),hashResult);
+    
+    concatenatedParams = concatenateParameters(privateKey,deviceName,"out",temp_out);
+    hashResult = hashToString(createHash(concatenatedParams)).substring(0,40);
+    sendToServer(createURL(deviceName,"out",temp_out),hashResult);
+    
+    lastTempRead = now();
+  }
   
-  String concatenatedParams;
-  String hashResult;
-  
-  float temp_in = readTemperature(insideThermometer);
-  float temp_out = readTemperature(outsideThermometer);
-  
-  concatenatedParams = concatenateParameters(privateKey,deviceName,"in",temp_in);
-  hashResult = hashToString(createHash(concatenatedParams)).substring(0,40);
-  sendToServer(createURL(deviceName,"in",temp_in),hashResult);
+  //time sync
+  if(ntpLastUpdate + ntpIntervalSync < now())
+  {
+    if(syncTimeNTP(10))
+    {
+      Serial.println("time updated");
+    }
+    else
+    {
+      Serial.println("cannot sync time");
+    }
+  }
+}
 
-  concatenatedParams = concatenateParameters(privateKey,deviceName,"out",temp_out);
-  hashResult = hashToString(createHash(concatenatedParams)).substring(0,40);
-  sendToServer(createURL(deviceName,"out",temp_out),hashResult);
+/***** NTP FUNCTIONS *****/
+int syncTimeNTP(int numberOfTrys)
+{
+  //Try to get the date and time
+  int trys = 0;
+  while(!getTimeAndDate() && trys<numberOfTrys)
+  {
+    trys++;
+  }
+  
+  if(trys < 10)
+  {
+    return 1;
+  }
+  else
+  {
+    return 0;
+  }
+}
 
-  delay(delay_ms);
+
+// Do not alter this function, it is used by the system
+int getTimeAndDate()
+{
+  int flag=0;
+  Udp.begin(localPort);
+  sendNTPpacket(timeServer);
+  delay(1000);
+  if(Udp.parsePacket())
+  {
+    Udp.read(packetBuffer,NTP_PACKET_SIZE);  // read the packet into the buffer
+    unsigned long highWord, lowWord, epoch;
+    highWord = word(packetBuffer[40], packetBuffer[41]);
+    lowWord = word(packetBuffer[42], packetBuffer[43]);  
+    epoch = highWord << 16 | lowWord;
+    epoch = epoch - 2208988800;
+    flag=1;
+    setTime(epoch);
+    ntpLastUpdate = now();
+  }
+  return flag;
+}
+
+// Do not alter this function, it is used by the system
+unsigned long sendNTPpacket(IPAddress& address)
+{
+  memset(packetBuffer, 0, NTP_PACKET_SIZE); 
+  packetBuffer[0] = 0b11100011;
+  packetBuffer[1] = 0;
+  packetBuffer[2] = 6;
+  packetBuffer[3] = 0xEC;
+  packetBuffer[12]  = 49; 
+  packetBuffer[13]  = 0x4E;
+  packetBuffer[14]  = 49;
+  packetBuffer[15]  = 52;		   
+  Udp.beginPacket(address, 123);
+  Udp.write(packetBuffer,NTP_PACKET_SIZE);
+  Udp.endPacket(); 
 }
