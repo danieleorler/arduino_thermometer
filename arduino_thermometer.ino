@@ -5,11 +5,11 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
-char privateKey[] = "yourPrivateKey";
-String publicKey = "yourPublicKey";
+char privateKey[] = "yourprivateKey";
+String publicKey = "yourpublicKey";
 char serverName[] = "sultry-ridge-5201.herokuapp.com";
 long delay_ms = 1800000;
-String deviceName = "viabasse";
+char deviceName[] = "viabasse";
 
 
 //mac address
@@ -100,7 +100,7 @@ String createURL(char* device, char* sensor, float temperature)
 /*
 * sends data to the webservice
 */
-void sendToServer(String URL, String hash)
+int sendToServer(String URL, String hash)
 {
   // attempt to connect
   if (client.connect(serverName, 80))
@@ -110,22 +110,43 @@ void sendToServer(String URL, String hash)
     client.println(URL);
     client.println("Host: sultry-ridge-5201.herokuapp.com");
     client.println("User-Agent: arduino-ethernet");
+    client.println("Connection: close");
     client.println("ARD-HASH: "+hash);
     client.println("ARD-APIKEY: "+publicKey);
     client.println();
-    
-    while(!client.available())
-    {
-        delay(1);
-    }
-    
-    client.stop();
-    
   }
   else
   {
     Serial.println("error");
+    return 0;
   }
+  
+  int connectLoop = 0;
+  int inChar = 0;
+  while(client.connected())
+  {
+    while(client.available())
+    {
+      inChar = client.read();
+      Serial.write(inChar);
+      connectLoop = 0;
+    }
+    
+    delay(1);
+    
+    connectLoop++;
+    if(connectLoop > 10000)
+    {
+      Serial.println();
+      Serial.println(F("Timeout inside while"));
+      client.stop();
+    }
+  }
+  
+  Serial.println();
+  Serial.println(F("Timeout outside while"));
+  client.stop();
+  return 1;
 
 }
 
